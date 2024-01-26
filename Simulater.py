@@ -1,44 +1,25 @@
-from cryptography.hazmat.backends import default_backend
-from cryptography.hazmat.primitives import serialization, hashes
-from cryptography.hazmat.primitives.asymmetric import padding
-from KeyAuthority import get_public_key_by_nodeNumber
+import subprocess
+import sys
 
 
-def encrypt_file(public_key, input_file, output_file):
-    # Load the public key
-    public_key_obj = serialization.load_pem_public_key(
-        public_key,
-        backend=default_backend()
-    )
+def simulate_communication(sender, receiver, filename):
+    """
+    Simulates the communication between nodes for sending a file.
+    This function assumes that node scripts are named node1.py, node2.py, etc.
+    """
+    node_script = f'node{sender}.py'
 
-    # Read the content of the input file
-    with open(input_file, 'rb') as f:
-        plaintext = f.read()
-
-    # Encrypt the file
-    ciphertext = public_key_obj.encrypt(
-        plaintext,
-        padding.OAEP(
-            mgf=padding.MGF1(algorithm=hashes.SHA256()),
-            algorithm=hashes.SHA256(),
-            label=None
-        )
-    )
-
-    # Save the encrypted content to the output file
-    with open(output_file, 'wb') as f:
-        f.write(ciphertext)
+    try:
+        # Simulating the process by calling the respective node script
+        subprocess.run([sys.executable, node_script, str(receiver), filename], check=True)
+    except subprocess.CalledProcessError as e:
+        print(f"An error occurred while communicating between nodes: {e}")
 
 
-# Example usage
-NodeNumber = 1
-public_key = get_public_key_by_nodeNumber(NodeNumber)
+if __name__ == "__main__":
+    # Example usage
+    sender_node = int(input("Enter the sender node number: "))
+    receiver_node = int(input("Enter the receiver node number: "))
+    filename = input("Enter the filename to send: ")
 
-if public_key:
-    input_file = 'sample_file.txt'
-    output_file = 'encrypted_sample_file.bin'
-
-    encrypt_file(public_key, input_file, output_file)
-
-else:
-    print(f"Public Key not found for NodeNumber: {NodeNumber}")
+    simulate_communication(sender_node, receiver_node, filename)

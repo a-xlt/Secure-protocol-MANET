@@ -1,79 +1,74 @@
+import os
 import sqlite3
 from cryptography.hazmat.backends import default_backend
-from cryptography.hazmat.primitives.asymmetric import rsa
 from cryptography.hazmat.primitives import serialization
+from cryptography.hazmat.primitives.asymmetric import rsa
 import uuid
 
 
-def generate_key_pair():
+# Function to generate keys
+def generate_keys():
+    # Generate private key
     private_key = rsa.generate_private_key(
         public_exponent=65537,
         key_size=2048,
         backend=default_backend()
     )
+
+    # Generate public key
     public_key = private_key.public_key()
 
-    private_key_pem = private_key.private_bytes(
-        encoding=serialization.Encoding.PEM,
-        format=serialization.PrivateFormat.TraditionalOpenSSL,
-        encryption_algorithm=serialization.NoEncryption()
-    )
-
-    public_key_pem = public_key.public_bytes(
-        encoding=serialization.Encoding.PEM,
-        format=serialization.PublicFormat.SubjectPublicKeyInfo
-    )
-
-    return private_key_pem, public_key_pem
-
-
-def save_private_key(key, filename):
-    with open('private_keys\\'+filename, 'wb') as f:
-        f.write(key)
-
-
-def save_public_key(key, filename):
-    with open('public_keys\\'+filename, 'wb') as f:
-        f.write(key)
-
-
-def save_key_names_to_db(private_key_name, public_key_name, nodeNumber):
-    conn = sqlite3.connect('keys.db')
-    cursor = conn.cursor()
-    # Create a table if it doesn't exist
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS key_pairs (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            private_key_name TEXT,
-            public_key_name TEXT,
-            nodeNumber INTEGER
+    public_guid = str(uuid.uuid4())
+    private_guid = str(uuid.uuid4())
+    with open(f"keys/{private_guid}.pem", "wb") as priv_file:
+        priv_file.write(
+            private_key.private_bytes(
+                encoding=serialization.Encoding.PEM,
+                format=serialization.PrivateFormat.TraditionalOpenSSL,
+                encryption_algorithm=serialization.NoEncryption()
+            )
         )
-    ''')
-    # Insert the key names into the database
-    cursor.execute('INSERT INTO key_pairs (private_key_name, public_key_name,nodeNumber) VALUES (?, ?,?)',
-                   (private_key_name, public_key_name, nodeNumber))
+
+    with open(f"keys/{public_guid}.pem", "wb") as pub_file:
+        pub_file.write(
+            public_key.public_bytes(
+                encoding=serialization.Encoding.PEM,
+                format=serialization.PublicFormat.SubjectPublicKeyInfo
+            )
+        )
+
+    return private_guid, public_guid
+
+
+# Function to save keys to database
+def save_keys_to_db(node_number, private_key, public_key):
+    # Connect to the SQLite database
+    conn = sqlite3.connect('node_keys.db')
+    cursor = conn.cursor()
+
+    # Create table if it doesn't exist
+    cursor.execute('''CREATE TABLE IF NOT EXISTS keys 
+                   (node_number INTEGER PRIMARY KEY, private_key TEXT, public_key TEXT)''')
+
+    # Insert keys into the database
+    cursor.execute('''INSERT INTO keys (node_number, private_key, public_key) 
+                   VALUES (?, ?, ?)''', (node_number, private_key, public_key))
+
+    # Commit the changes and close the connection
     conn.commit()
     conn.close()
 
 
-# Create keys
-private_key, public_key = generate_key_pair()
+if __name__ == "__main__":
+    # Ensure the 'keys' directory exists
+    if not os.path.exists('keys'):
+        os.makedirs('keys')
 
-publicGuid = str(uuid.uuid4())+'.pem'
-privateGuid = str(uuid.uuid4())+'.pem'
+    # Get node number from user
+    node_number = int(input("Enter the node number: "))
 
-# Save keys to files
-nodeNumber = input("Enter Node number: ")
-if nodeNumber.isdigit():
-    save_private_key(private_key, privateGuid)
-    save_public_key(public_key, publicGuid)
-    save_key_names_to_db(privateGuid, publicGuid, nodeNumber)
-else:
-    try:
-        number = int(nodeNumber)
-    except ValueError:
-        print("The input is not a node number.")
+    # Generate and save keys
+    private_key, public_key = generate_keys()
 
-
-
-
+    # Save keys to the database
+    save_keys_to_db(node_number, private_key, public_key)
